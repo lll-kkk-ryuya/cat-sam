@@ -1,13 +1,12 @@
 import json
 import os
-from os.path import join
 from cat_sam.datasets.base import BinaryCATSAMDataset
 import random
 
 class CustomDataset(BinaryCATSAMDataset):
     def __init__(
             self,
-            data_dir: str,
+            json_data: str,
             train_flag: bool,
             shot_num: int = None,
             label_threshold: int = 254,
@@ -19,15 +18,9 @@ class CustomDataset(BinaryCATSAMDataset):
             noisy_mask_threshold: float = 0.0,
             **super_args
     ):
-        json_path = join(data_dir, 'train.json' if train_flag else 'test.json')
-        with open(json_path, 'r') as j_f:
-            json_config = json.load(j_f)
+        # Parse JSON data
+        json_config = json.loads(json_data)
         
-        # Update image and mask paths
-        for key in json_config.keys():
-            json_config[key]['image_path'] = join(data_dir, json_config[key]['image_path'])
-            json_config[key]['mask_path'] = join(data_dir, json_config[key]['mask_path'])
-
         # Handle few-shot learning
         if shot_num is not None:
             assert 1 <= shot_num <= 16, f"Invalid shot_num: {shot_num}! Must be between 1 and 16!"
@@ -36,19 +29,22 @@ class CustomDataset(BinaryCATSAMDataset):
             json_config = {key: json_config[key] for key in selected_keys}
 
         super(CustomDataset, self).__init__(
-            dataset_config=json_config, train_flag=train_flag,
-            label_threshold=label_threshold, object_connectivity=object_connectivity,
-            area_threshold=area_threshold, relative_threshold=relative_threshold,
+            dataset_config=json_config,
+            train_flag=train_flag,
+            label_threshold=label_threshold,
+            object_connectivity=object_connectivity,
+            area_threshold=area_threshold,
+            relative_threshold=relative_threshold,
             relative_threshold_ratio=relative_threshold_ratio,
-            ann_scale_factor=ann_scale_factor, noisy_mask_threshold=noisy_mask_threshold,
+            ann_scale_factor=ann_scale_factor,
+            noisy_mask_threshold=noisy_mask_threshold,
             **super_args
         )
 
-# Function to get dataset parameters from command line arguments
 def get_dataset_params():
     import argparse
     parser = argparse.ArgumentParser(description='Custom Dataset Parameters')
-    parser.add_argument('--data_dir', type=str, required=True, help='Path to the data directory')
+    parser.add_argument('--json_data', type=str, required=True, help='JSON string containing dataset configuration')
     parser.add_argument('--shot_num', type=int, default=None, help='Number of shots for few-shot learning')
     parser.add_argument('--label_threshold', type=int, default=254)
     parser.add_argument('--object_connectivity', type=int, default=8)
