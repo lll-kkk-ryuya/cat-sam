@@ -49,6 +49,7 @@ def get_dataset_params():
     import argparse
     parser = argparse.ArgumentParser(description='Custom Dataset Parameters')
     parser.add_argument('--data_dir', type=str, required=True, help='Path to the data directory')
+    parser.add_argument('--shot_num', type=int, default=None, help='Number of shots for few-shot learning')
     parser.add_argument('--label_threshold', type=int, default=254)
     parser.add_argument('--object_connectivity', type=int, default=8)
     parser.add_argument('--area_threshold', type=int, default=20)
