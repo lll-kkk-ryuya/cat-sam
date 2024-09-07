@@ -7,6 +7,7 @@ class CustomDataset(BinaryCATSAMDataset):
     def __init__(
             self,
             data_dir: str,
+            json_config: dict,
             train_flag: bool,
             shot_num: int = None,
             label_threshold: int = 254,
@@ -17,19 +18,14 @@ class CustomDataset(BinaryCATSAMDataset):
             noisy_mask_threshold: float = 0.0,
             **super_args
     ):
-        json_path = join(data_dir, 'train.json' if train_flag else 'test.json')
-        with open(json_path, 'r') as j_f:
-            json_config = json.load(j_f)
-        
-        for key in json_config.keys():
-            json_config[key]['image_path'] = join(data_dir, json_config[key]['image_path'])
-            json_config[key]['mask_path'] = join(data_dir, json_config[key]['mask_path'])
+        # JSONコンフィグを直接使用
+        dataset_config = json_config
 
         if shot_num is not None:
-            json_config = self._sample_few_shot(json_config, shot_num)
+            dataset_config = self._sample_few_shot(dataset_config, shot_num)
 
         super(CustomDataset, self).__init__(
-            dataset_config=json_config,
+            dataset_config=dataset_config,
             train_flag=train_flag,
             label_threshold=label_threshold,
             object_connectivity=object_connectivity,
@@ -40,9 +36,9 @@ class CustomDataset(BinaryCATSAMDataset):
             **super_args
         )
 
-    def _sample_few_shot(self, json_config, shot_num):
+    def _sample_few_shot(self, dataset_config, shot_num):
         # Few-shotサンプリングのロジックをここに実装
         import random
-        keys = list(json_config.keys())
+        keys = list(dataset_config.keys())
         sampled_keys = random.sample(keys, min(shot_num, len(keys)))
-        return {key: json_config[key] for key in sampled_keys}
+        return {key: dataset_config[key] for key in sampled_keys}
