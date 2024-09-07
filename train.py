@@ -18,6 +18,7 @@ from misc import get_idle_gpu, get_idle_port, set_randomness
 from cat_sam.datasets.whu import WHUDataset
 from cat_sam.datasets.kvasir import KvasirDataset
 from cat_sam.datasets.sbu import SBUDataset
+from cat_sam.datasets.custom_dataset import CustomDataset
 from cat_sam.datasets.transforms import HorizontalFlip, VerticalFlip, RandomCrop
 from cat_sam.models.modeling import CATSAMT, CATSAMA
 from cat_sam.utils.evaluators import SamHQIoU, StreamSegMetrics
@@ -55,7 +56,16 @@ def worker_init_fn(worker_id: int, base_seed: int, same_worker_seed: bool = True
     torch.cuda.manual_seed(seed)
     os.environ['PYTHONHASHSEED'] = str(seed)
 
-
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+    
 def parse():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -80,7 +90,7 @@ def parse():
         help="The batch size for the validation dataloader. Default to be 1 for one-shot and 4 for 16- and full-shot."
     )
     parser.add_argument(
-        '--dataset', required=True, type=str, choices=['whu', 'sbu', 'kvasir'],
+        '--dataset', required=True, type=str, choices=['whu', 'sbu', 'kvasir', 'custom'],
         help="Your target dataset. This argument is required."
     )
     parser.add_argument(
@@ -96,6 +106,30 @@ def parse():
     parser.add_argument(
         '--cat_type', required=True, type=str, choices=['cat-a', 'cat-t'],
         help='The type of the CAT-SAM model. This argument is required.'
+    )
+    parser.add_argument(
+        '--label_threshold', type=int, default=254,
+        help="Label threshold for binary segmentation"
+    )
+    parser.add_argument(
+        '--object_connectivity', type=int, 
+        default=8,help="Object connectivity for connected component analysis"
+    )
+    parser.add_argument(
+        '--area_threshold', type=int, default=20,
+        help="Area threshold for small object removal"
+    )
+    parser.add_argument(
+        '--relative_threshold', type=str2bool, default=True,
+        help="Whether to use relative threshold"
+    )
+    parser.add_argument(
+        '--ann_scale_factor', type=float, 
+        default=1.0,help="Annotation scale factor"
+    )
+    parser.add_argument(
+        '--noisy_mask_threshold', type=float, default=0.0,
+        help="Threshold for noisy mask generation"
     )
     return parser.parse_args()
 
@@ -143,19 +177,70 @@ def main_worker(worker_id, worker_args):
         dataset_class = KvasirDataset
     elif worker_args.dataset == 'sbu':
         dataset_class = SBUDataset
+    elif worker_args.dataset == 'custom':
+        dataset_class = CustomDataset
     else:
         raise ValueError(f'invalid dataset name: {worker_args.dataset}!')
 
-    dataset_dir = join(worker_args.data_dir, worker_args.dataset)
+    dataset_dir = worker_args.data_dir
     train_dataset = dataset_class(
-        data_dir=dataset_dir, train_flag=True, shot_num=worker_args.shot_num,
-        transforms=transforms, max_object_num=max_object_num
+        data_dir=dataset_dir,
+        train_flag=True,
+        shot_num=worker_args.shot_num,
+        transforms=transforms,
+        max_object_num=max_object_num,
+        label_threshold=worker_args.label_threshold,
+        object_connectivity=worker_args.object_connectivity,
+        area_threshold=worker_args.area_threshold,
+        relative_threshold=worker_args.relative_threshold,
+        ann_scale_factor=worker_args.ann_scale_factor,
+        noisy_mask_threshold=worker_args.noisy_mask_threshold
     )
-    val_dataset = dataset_class(data_dir=dataset_dir, train_flag=False)
+    val_dataset = dataset_class(
+        data_dir=dataset_dir,
+        train_flag=False,
+        label_threshold=worker_args.label_threshold,
+        object_connectivity=worker_args.object_connectivity,
+        area_threshold=worker_args.area_threshold,
+        relative_threshold=worker_args.relative_threshold,
+        ann_scale_factor=worker_args.ann_scale_factor,
+        noisy_mask_threshold=worker_args.noisy_mask_threshold
+    )
 
-    train_bs = worker_args.train_bs if worker_args.train_bs else (1 if worker_args.shot_num == 1 else 4)
-    val_bs = worker_args.val_bs if worker_args.val_bs else 2
-    train_workers, val_workers = 1 if worker_args.shot_num == 1 else 4, 2
+    if worker_args.dataset == 'custom':
+        if worker_args.shot_num is None:
+            train_bs = worker_args.train_bs if worker_args.train_bs else 4
+            train_workers = 4
+        else:
+            base_bs = 1
+            max_bs = 4
+            base_workers = 1
+            max_workers = 4
+            train_bs = worker_args.train_bs if worker_args.train_bs else min(
+                max_bs, 
+                base_bs + (max_bs - base_bs) * (worker_args.shot_num - 1) / 15
+            )
+            train_bs = max(1, int(train_bs)) 
+            train_workers = min(
+                max_workers, 
+                base_workers + (max_workers - base_workers) * (worker_args.shot_num - 1) / 15
+            )
+            train_workers = max(1, int(train_workers))  
+        val_bs = worker_args.val_bs if worker_args.val_bs else 2
+        val_workers = 2
+
+        print(f"Custom dataset: Shot num = {worker_args.shot_num}, "
+              f"Train batch size = {train_bs}, "
+              f"Train workers = {train_workers}")
+
+    else:
+        train_bs = worker_args.train_bs if worker_args.train_bs else (1 if worker_args.shot_num == 1 else 4)
+        val_bs = worker_args.val_bs if worker_args.val_bs else 2
+        train_workers, val_workers = 1 if worker_args.shot_num == 1 else 4, 2
+
+    if worker_args.num_workers is not None:
+        train_workers, val_workers = worker_args.num_workers, worker_args.num_workers
+
     if worker_args.num_workers is not None:
         train_workers, val_workers = worker_args.num_workers, worker_args.num_workers
 
@@ -190,16 +275,24 @@ def main_worker(worker_id, worker_args):
         params=[p for p in model.parameters() if p.requires_grad], lr=1e-3, weight_decay=1e-4
     )
     # full-shot
-    if worker_args.shot_num is None:
-        max_epoch_num, valid_per_epochs = 30, 1
-    # one-shot
-    elif worker_args.shot_num == 1:
-        max_epoch_num, valid_per_epochs = 2000, 20
-    # 16-shot
-    elif worker_args.shot_num == 16:
-        max_epoch_num, valid_per_epochs = 200, 2
+    if worker_args.dataset == 'custom':
+  
+        if worker_args.shot_num is None:
+            max_epoch_num, valid_per_epochs = 30, 1
+        else:
+            max_epoch_num = int(2000 - (worker_args.shot_num - 1) * 120) 
+            valid_per_epochs = max(1, int(20 - (worker_args.shot_num - 1)))  
+            max_epoch_num = max(max_epoch_num, 100)  
     else:
-        raise RuntimeError
+        # 既存のデータセット用の設定
+        if worker_args.shot_num is None:
+            max_epoch_num, valid_per_epochs = 30, 1
+        elif worker_args.shot_num == 1:
+            max_epoch_num, valid_per_epochs = 2000, 20
+        elif worker_args.shot_num == 16:
+            max_epoch_num, valid_per_epochs = 200, 2
+        else:
+            raise RuntimeError
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer, T_max=max_epoch_num, eta_min=1e-5
     )
