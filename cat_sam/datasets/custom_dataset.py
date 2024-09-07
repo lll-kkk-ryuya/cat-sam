@@ -1,32 +1,32 @@
 import json
-import os
+from os.path import join
+
 from cat_sam.datasets.base import BinaryCATSAMDataset
-import random
 
 class CustomDataset(BinaryCATSAMDataset):
     def __init__(
             self,
-            json_data: str,
+            data_dir: str,
             train_flag: bool,
             shot_num: int = None,
             label_threshold: int = 254,
             object_connectivity: int = 8,
             area_threshold: int = 20,
             relative_threshold: bool = True,
-            relative_threshold_ratio: float = 0.001,
-            ann_scale_factor: int = 1,
+            ann_scale_factor: float = 1.0,
             noisy_mask_threshold: float = 0.0,
             **super_args
     ):
-        # Parse JSON data
-        json_config = json.loads(json_data)
+        json_path = join(data_dir, 'train.json' if train_flag else 'test.json')
+        with open(json_path, 'r') as j_f:
+            json_config = json.load(j_f)
         
-        # Handle few-shot learning
+        for key in json_config.keys():
+            json_config[key]['image_path'] = join(data_dir, json_config[key]['image_path'])
+            json_config[key]['mask_path'] = join(data_dir, json_config[key]['mask_path'])
+
         if shot_num is not None:
-            assert 1 <= shot_num <= 16, f"Invalid shot_num: {shot_num}! Must be between 1 and 16!"
-            all_keys = list(json_config.keys())
-            selected_keys = random.sample(all_keys, min(shot_num, len(all_keys)))
-            json_config = {key: json_config[key] for key in selected_keys}
+            json_config = self._sample_few_shot(json_config, shot_num)
 
         super(CustomDataset, self).__init__(
             dataset_config=json_config,
@@ -35,22 +35,14 @@ class CustomDataset(BinaryCATSAMDataset):
             object_connectivity=object_connectivity,
             area_threshold=area_threshold,
             relative_threshold=relative_threshold,
-            relative_threshold_ratio=relative_threshold_ratio,
             ann_scale_factor=ann_scale_factor,
             noisy_mask_threshold=noisy_mask_threshold,
             **super_args
         )
 
-def get_dataset_params():
-    import argparse
-    parser = argparse.ArgumentParser(description='Custom Dataset Parameters')
-    parser.add_argument('--json_data', type=str, required=True, help='JSON string containing dataset configuration')
-    parser.add_argument('--shot_num', type=int, default=None, help='Number of shots for few-shot learning')
-    parser.add_argument('--label_threshold', type=int, default=254)
-    parser.add_argument('--object_connectivity', type=int, default=8)
-    parser.add_argument('--area_threshold', type=int, default=20)
-    parser.add_argument('--relative_threshold', type=bool, default=True)
-    parser.add_argument('--relative_threshold_ratio', type=float, default=0.001)
-    parser.add_argument('--ann_scale_factor', type=int, default=1)
-    parser.add_argument('--noisy_mask_threshold', type=float, default=0.0)
-    return parser.parse_args()
+    def _sample_few_shot(self, json_config, shot_num):
+        # Few-shotサンプリングのロジックをここに実装
+        import random
+        keys = list(json_config.keys())
+        sampled_keys = random.sample(keys, min(shot_num, len(keys)))
+        return {key: json_config[key] for key in sampled_keys}
