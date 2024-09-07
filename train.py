@@ -1,3 +1,4 @@
+import json
 import argparse
 import os
 import random
@@ -183,29 +184,59 @@ def main_worker(worker_id, worker_args):
         raise ValueError(f'invalid dataset name: {worker_args.dataset}!')
 
     dataset_dir = worker_args.data_dir
-    train_dataset = dataset_class(
-        data_dir=dataset_dir,
-        train_flag=True,
-        shot_num=worker_args.shot_num,
-        transforms=transforms,
-        max_object_num=max_object_num,
-        label_threshold=worker_args.label_threshold,
-        object_connectivity=worker_args.object_connectivity,
-        area_threshold=worker_args.area_threshold,
-        relative_threshold=worker_args.relative_threshold,
-        ann_scale_factor=worker_args.ann_scale_factor,
-        noisy_mask_threshold=worker_args.noisy_mask_threshold
-    )
-    val_dataset = dataset_class(
-        data_dir=dataset_dir,
-        train_flag=False,
-        label_threshold=worker_args.label_threshold,
-        object_connectivity=worker_args.object_connectivity,
-        area_threshold=worker_args.area_threshold,
-        relative_threshold=worker_args.relative_threshold,
-        ann_scale_factor=worker_args.ann_scale_factor,
-        noisy_mask_threshold=worker_args.noisy_mask_threshold
-    )
+    if worker_args.dataset == 'custom':
+        with open(worker_args.json_config, 'r') as f:
+            json_config = json.load(f)
+        train_dataset = dataset_class(
+            data_dir=dataset_dir,
+            json_config=json_config,
+            train_flag=True,
+            shot_num=worker_args.shot_num,
+            transforms=transforms,
+            max_object_num=max_object_num,
+            label_threshold=worker_args.label_threshold,
+            object_connectivity=worker_args.object_connectivity,
+            area_threshold=worker_args.area_threshold,
+            relative_threshold=worker_args.relative_threshold,
+            ann_scale_factor=worker_args.ann_scale_factor,
+            noisy_mask_threshold=worker_args.noisy_mask_threshold
+        )
+        val_dataset = dataset_class(
+            data_dir=dataset_dir,
+            json_config=json_config,
+            train_flag=False,
+            label_threshold=worker_args.label_threshold,
+            object_connectivity=worker_args.object_connectivity,
+            area_threshold=worker_args.area_threshold,
+            relative_threshold=worker_args.relative_threshold,
+            ann_scale_factor=worker_args.ann_scale_factor,
+            noisy_mask_threshold=worker_args.noisy_mask_threshold
+        )
+    else:
+        train_dataset = dataset_class(
+            data_dir=dataset_dir,
+            train_flag=True,
+            shot_num=worker_args.shot_num,
+            transforms=transforms,
+            max_object_num=max_object_num,
+            label_threshold=worker_args.label_threshold,
+            object_connectivity=worker_args.object_connectivity,
+            area_threshold=worker_args.area_threshold,
+            relative_threshold=worker_args.relative_threshold,
+            ann_scale_factor=worker_args.ann_scale_factor,
+            noisy_mask_threshold=worker_args.noisy_mask_threshold
+        )
+        val_dataset = dataset_class(
+            data_dir=dataset_dir,
+            train_flag=False,
+            label_threshold=worker_args.label_threshold,
+            object_connectivity=worker_args.object_connectivity,
+            area_threshold=worker_args.area_threshold,
+            relative_threshold=worker_args.relative_threshold,
+            ann_scale_factor=worker_args.ann_scale_factor,
+            noisy_mask_threshold=worker_args.noisy_mask_threshold
+        )
+
 
     if worker_args.dataset == 'custom':
         if worker_args.shot_num is None:
