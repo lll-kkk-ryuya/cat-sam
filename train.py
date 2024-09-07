@@ -132,6 +132,7 @@ def parse():
         '--noisy_mask_threshold', type=float, default=0.0,
         help="Threshold for noisy mask generation"
     )
+    parser.add_argument('--json_config', type=str, help='Path to the JSON configuration file for custom dataset')
     return parser.parse_args()
 
 
