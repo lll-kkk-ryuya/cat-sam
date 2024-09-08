@@ -5,7 +5,7 @@ import random
 from contextlib import nullcontext
 from functools import partial
 from os.path import join
-
+import matplotlib.pyplot as plt
 import torch.nn.functional as F
 import numpy as np
 import torch
@@ -150,6 +150,24 @@ def batch_to_cuda(batch, device):
             ]
     return batch
 
+class EarlyStopping:
+    def __init__(self, patience=50, min_delta=0):
+        self.patience = patience
+        self.min_delta = min_delta
+        self.counter = 0
+        self.best_loss = None
+        self.early_stop = False
+
+    def __call__(self, val_loss):
+        if self.best_loss is None:
+            self.best_loss = val_loss
+        elif self.best_loss - val_loss > self.min_delta:
+            self.best_loss = val_loss
+            self.counter = 0
+        else:
+            self.counter += 1
+            if self.counter >= self.patience:
+                self.early_stop = True
 
 
 def main_worker(worker_id, worker_args):
@@ -350,6 +368,12 @@ def main_worker(worker_id, worker_args):
 
     print(f"Dataset size: {len(train_dataset)}, Batch size: {train_bs}")
 
+    early_stopping = EarlyStopping(patience=50, min_delta=1e-4)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.1, patience=20, verbose=True)
+
+    loss_history = []
+    miou_history = []
+
     for epoch in range(1, max_epoch_num + 1):
         model.train()
         epoch_loss = 0.0
@@ -400,9 +424,9 @@ def main_worker(worker_id, worker_args):
             train_pbar.set_postfix({'loss': f"{total_loss.item():.4f}"})
 
         train_pbar.close()
-        print(f"Epoch {epoch}/{max_epoch_num}, Average Loss: {epoch_loss / len(train_dataloader):.4f}")
-
-        scheduler.step()
+        avg_loss = epoch_loss / len(train_dataloader)
+        loss_history.append(avg_loss)
+        print(f"Epoch {epoch}/{max_epoch_num}, Average Loss: {avg_loss:.4f}")
 
         if local_rank == 0 and epoch % valid_per_epochs == 0:
             model.eval()
@@ -433,6 +457,10 @@ def main_worker(worker_id, worker_args):
             miou = iou_eval.compute()[0]['Mean Foreground IoU']
             iou_eval.reset()
             print(f"Epoch {epoch}/{max_epoch_num}, Validation mIoU: {miou:.4f}")
+            miou_history.append(miou)
+
+            # 学習率の調整
+            scheduler.step(miou)
 
             if miou > best_miou:
                 torch.save(
@@ -441,6 +469,23 @@ def main_worker(worker_id, worker_args):
                 )
                 best_miou = miou
                 print(f'Best mIoU has been updated to {best_miou:.4f}!')
+
+            # 早期停止のチェック
+            early_stopping(miou)
+            if early_stopping.early_stop:
+                print(f"Early stopping triggered at epoch {epoch}")
+                break
+
+            # グラフの描画
+            plt.figure(figsize=(12, 4))
+            plt.subplot(1, 2, 1)
+            plt.plot(loss_history)
+            plt.title('Training Loss')
+            plt.subplot(1, 2, 2)
+            plt.plot(miou_history)
+            plt.title('Validation mIoU')
+            plt.savefig(join(exp_path, 'training_progress.png'))
+            plt.close()
 
     print(f"Training completed. Best mIoU: {best_miou:.4f}")
 
