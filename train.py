@@ -347,16 +347,17 @@ def main_worker(worker_id, worker_args):
     )
     os.makedirs(exp_path, exist_ok=True)
     model.train()
+
+    print(f"Dataset size: {len(train_dataset)}, Batch size: {train_bs}")
+
     for epoch in range(1, max_epoch_num + 1):
-        print(f"Starting epoch {epoch}")
+        model.train()
+        epoch_loss = 0.0
         if hasattr(train_dataloader.sampler, 'set_epoch'):
             train_dataloader.sampler.set_epoch(epoch)
 
-        train_pbar = None
-        if local_rank == 0:
-            train_pbar = tqdm(total=len(train_dataloader), desc='train', leave=False)
+        train_pbar = tqdm(total=len(train_dataloader), desc=f'Epoch {epoch}/{max_epoch_num}', leave=False)
         for train_step, batch in enumerate(train_dataloader):
-            print(f"Processing batch {train_step}")
             batch = batch_to_cuda(batch, device)
             masks_pred = model(
                 imgs=batch['images'], point_coords=batch['point_coords'], point_labels=batch['point_labels'],
@@ -372,7 +373,7 @@ def main_worker(worker_id, worker_args):
                     if len(masks[i].shape) != 4:
                         raise RuntimeError
 
-            bce_loss_list, dice_loss_list, focal_loss_list = [], [], []
+            bce_loss_list, dice_loss_list = [], []
             for i in range(len(masks_pred)):
                 pred, label = masks_pred[i], masks_gt[i]
                 label = torch.where(torch.gt(label, 0.), 1., 0.)
@@ -385,11 +386,7 @@ def main_worker(worker_id, worker_args):
             bce_loss = sum(bce_loss_list) / len(bce_loss_list)
             dice_loss = sum(dice_loss_list) / len(dice_loss_list)
             total_loss = bce_loss + dice_loss
-            loss_dict = dict(
-                total_loss=total_loss.clone().detach(),
-                bce_loss=bce_loss.clone().detach(),
-                dice_loss=dice_loss.clone().detach()
-            )
+            epoch_loss += total_loss.item()
 
             backward_context = nullcontext
             if torch.distributed.is_initialized():
@@ -398,41 +395,26 @@ def main_worker(worker_id, worker_args):
                 total_loss.backward()
             optimizer.step()
             optimizer.zero_grad()
-            if torch.distributed.is_initialized():
-                for key in loss_dict.keys():
-                    if hasattr(loss_dict[key], 'detach'):
-                        loss_dict[key] = loss_dict[key].detach()
-                    torch.distributed.reduce(loss_dict[key], dst=0, op=torch.distributed.ReduceOp.SUM)
-                    loss_dict[key] /= torch.distributed.get_world_size()
 
-            if train_pbar:
-                train_pbar.update(1)
-                str_step_info = "Epoch: {epoch}/{epochs:4}. " \
-                                "Loss: {total_loss:.4f}(total), {bce_loss:.4f}(bce), {dice_loss:.4f}(dice)".format(
-                    epoch=epoch, epochs=max_epoch_num,
-                    total_loss=loss_dict['total_loss'], bce_loss=loss_dict['bce_loss'], dice_loss=loss_dict['dice_loss']
-                )
-                train_pbar.set_postfix_str(str_step_info)
+            train_pbar.update(1)
+            train_pbar.set_postfix({'loss': f"{total_loss.item():.4f}"})
+
+        train_pbar.close()
+        print(f"Epoch {epoch}/{max_epoch_num}, Average Loss: {epoch_loss / len(train_dataloader):.4f}")
 
         scheduler.step()
-        if train_pbar:
-            train_pbar.clear()
 
         if local_rank == 0 and epoch % valid_per_epochs == 0:
             model.eval()
-            valid_pbar = tqdm(total=len(val_dataloader), desc='valid', leave=False)
+            valid_pbar = tqdm(total=len(val_dataloader), desc='Validating', leave=False)
             for val_step, batch in enumerate(val_dataloader):
                 batch = batch_to_cuda(batch, device)
-                val_model = model
-                if hasattr(model, 'module'):
-                    val_model = model.module
+                val_model = model if not hasattr(model, 'module') else model.module
 
                 with torch.no_grad():
                     val_model.set_infer_img(img=batch['images'])
-                    if worker_args.dataset == 'm_roads':
-                        masks_pred = val_model.infer(point_coords=batch['point_coords'])
-                    else:
-                        masks_pred = val_model.infer(box_coords=batch['box_coords'])
+                    masks_pred = val_model.infer(point_coords=batch['point_coords'] if worker_args.dataset == 'm_roads' else None,
+                                                 box_coords=batch['box_coords'] if worker_args.dataset != 'm_roads' else None)
 
                 masks_gt = batch['gt_masks']
                 for masks in [masks_pred, masks_gt]:
@@ -446,14 +428,11 @@ def main_worker(worker_id, worker_args):
 
                 iou_eval.update(masks_gt, masks_pred, batch['index_name'])
                 valid_pbar.update(1)
-                str_step_info = "Epoch: {epoch}/{epochs:4}.".format(
-                    epoch=epoch, epochs=max_epoch_num
-                )
-                valid_pbar.set_postfix_str(str_step_info)
 
+            valid_pbar.close()
             miou = iou_eval.compute()[0]['Mean Foreground IoU']
             iou_eval.reset()
-            valid_pbar.clear()
+            print(f"Epoch {epoch}/{max_epoch_num}, Validation mIoU: {miou:.4f}")
 
             if miou > best_miou:
                 torch.save(
@@ -461,7 +440,9 @@ def main_worker(worker_id, worker_args):
                     join(exp_path, "best_model.pth")
                 )
                 best_miou = miou
-                print(f'Best mIoU has been updated to {best_miou:.2%}!')
+                print(f'Best mIoU has been updated to {best_miou:.4f}!')
+
+    print(f"Training completed. Best mIoU: {best_miou:.4f}")
 
 
 
