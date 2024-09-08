@@ -348,6 +348,7 @@ def main_worker(worker_id, worker_args):
     os.makedirs(exp_path, exist_ok=True)
     model.train()
     for epoch in range(1, max_epoch_num + 1):
+        print(f"Starting epoch {epoch}")
         if hasattr(train_dataloader.sampler, 'set_epoch'):
             train_dataloader.sampler.set_epoch(epoch)
 
@@ -355,6 +356,7 @@ def main_worker(worker_id, worker_args):
         if local_rank == 0:
             train_pbar = tqdm(total=len(train_dataloader), desc='train', leave=False)
         for train_step, batch in enumerate(train_dataloader):
+            print(f"Processing batch {train_step}")
             batch = batch_to_cuda(batch, device)
             masks_pred = model(
                 imgs=batch['images'], point_coords=batch['point_coords'], point_labels=batch['point_labels'],
