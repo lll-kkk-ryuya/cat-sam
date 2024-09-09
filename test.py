@@ -76,13 +76,13 @@ def run_test(test_args):
 
     if test_args.dataset == 'custom':
         test_dataset = dataset_class(
-            data_dir=join(test_args.data_dir, test_args.dataset),
-            train_flag=False,
-            **custom_config
+            data_dir=test_args.data_dir,  # join()を使用しない
+            json_config=custom_config,  # json_configを直接渡す
+            train_flag=False
         )
     else:
         test_dataset = dataset_class(
-            data_dir=join(test_args.data_dir, test_args.dataset), train_flag=False,json_config=custom_config
+            data_dir=join(test_args.data_dir, test_args.dataset), train_flag=False
         )
 
     test_dataloader = DataLoader(
