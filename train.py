@@ -463,7 +463,7 @@ def main_worker(worker_id, worker_args):
             # 学習率の調整
             scheduler.step(miou)
 
-            if miou > best_miou:
+            if miou >=  best_miou:
                 torch.save(
                     model.state_dict() if not hasattr(model, 'module') else model.module.state_dict(),
                     join(exp_path, "best_model.pth")
