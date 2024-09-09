@@ -82,7 +82,7 @@ def run_test(test_args):
         )
     else:
         test_dataset = dataset_class(
-            data_dir=join(test_args.data_dir, test_args.dataset), train_flag=False
+            data_dir=join(test_args.data_dir, test_args.dataset), train_flag=False,json_config=custom_config
         )
 
     test_dataloader = DataLoader(
