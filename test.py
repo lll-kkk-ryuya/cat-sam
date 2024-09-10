@@ -129,14 +129,12 @@ def run_test(test_args):
                 masks_pred = model.infer(box_coords=batch['box_coords'])
 
         masks_gt = batch['gt_masks']
-        for masks in [masks_pred, masks_gt]:
-            for i in range(len(masks)):
-                if len(masks[i].shape) == 2:
-                    masks[i] = masks[i][None, None, :]
-                if len(masks[i].shape) == 3:
-                    masks[i] = masks[i][None, :]
-                if len(masks[i].shape) != 4:
-                    raise RuntimeError
+        
+        # NumPy 配列に変換（必要な場合のみ）
+        if isinstance(masks_pred, torch.Tensor):
+            masks_pred = masks_pred.cpu().numpy()
+        if isinstance(masks_gt, torch.Tensor):
+            masks_gt = masks_gt.cpu().numpy()
 
         iou_eval.update(masks_gt, masks_pred, batch['index_name'])
 
@@ -145,17 +143,18 @@ def run_test(test_args):
             fig, axs = plt.subplots(1, 3, figsize=(15, 5))
             
             # 元画像
-            axs[0].imshow(batch['images'][i].cpu().permute(1, 2, 0))
+            img = batch['images'][i].cpu().permute(1, 2, 0).numpy()
+            axs[0].imshow(img)
             axs[0].set_title('Original Image')
             axs[0].axis('off')
             
             # 予測マスク
-            axs[1].imshow(masks_pred[i][0].cpu().numpy(), cmap='gray')
+            axs[1].imshow(masks_pred[i][0], cmap='gray')
             axs[1].set_title('Predicted Mask')
             axs[1].axis('off')
             
             # 正解マスク
-            axs[2].imshow(masks_gt[i][0].cpu().numpy(), cmap='gray')
+            axs[2].imshow(masks_gt[i][0], cmap='gray')
             axs[2].set_title('Ground Truth Mask')
             axs[2].axis('off')
             
