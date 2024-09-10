@@ -27,10 +27,7 @@ class CustomDataset(BinaryCATSAMDataset):
             dataset_config = self._sample_few_shot(dataset_config, shot_num)
 
         # クラス名が指定されていない場合はデフォルト値を使用
-        if class_names is None:
-            class_names = ['Background', 'Foreground']
-
-        self.class_names = class_names
+        self.class_names = class_names if class_names is not None else ['Background', 'Foreground']
 
         super(CustomDataset, self).__init__(
             dataset_config=dataset_config,
@@ -41,7 +38,6 @@ class CustomDataset(BinaryCATSAMDataset):
             relative_threshold=relative_threshold,
             ann_scale_factor=ann_scale_factor,
             noisy_mask_threshold=noisy_mask_threshold,
-            class_names=class_names,  # 親クラスにクラス名を渡す
             **super_args
         )
 
