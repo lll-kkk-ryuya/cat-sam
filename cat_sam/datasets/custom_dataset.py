@@ -1,5 +1,6 @@
 import json
 from os.path import join
+from typing import List
 
 from cat_sam.datasets.base import BinaryCATSAMDataset
 
@@ -16,6 +17,7 @@ class CustomDataset(BinaryCATSAMDataset):
             relative_threshold: bool = True,
             ann_scale_factor: float = 1.0,
             noisy_mask_threshold: float = 0.0,
+            class_names: List[str] = None,
             **super_args
     ):
         # JSONコンフィグを直接使用
@@ -23,6 +25,12 @@ class CustomDataset(BinaryCATSAMDataset):
 
         if shot_num is not None:
             dataset_config = self._sample_few_shot(dataset_config, shot_num)
+
+        # クラス名が指定されていない場合はデフォルト値を使用
+        if class_names is None:
+            class_names = ['Background', 'Foreground']
+
+        self.class_names = class_names
 
         super(CustomDataset, self).__init__(
             dataset_config=dataset_config,
@@ -33,6 +41,7 @@ class CustomDataset(BinaryCATSAMDataset):
             relative_threshold=relative_threshold,
             ann_scale_factor=ann_scale_factor,
             noisy_mask_threshold=noisy_mask_threshold,
+            class_names=class_names,  # 親クラスにクラス名を渡す
             **super_args
         )
 
