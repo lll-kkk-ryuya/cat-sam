@@ -108,7 +108,10 @@ def run_test(test_args):
     if test_args.dataset == 'hqseg44k':
         iou_eval = SamHQIoU()
     else:
-        if test_args.dataset in ['jsrt', 'fls', 'custom']:
+        if test_args.dataset == 'custom':
+            # カスタムデータセット用のクラス名を設定
+            class_names = ['Background', 'Foreground']  # または適切なクラス名のリスト
+        elif test_args.dataset in ['jsrt', 'fls']:
             class_names = test_dataset.class_names
         else:
             class_names = ['Background', 'Foreground']
