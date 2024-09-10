@@ -323,21 +323,22 @@ def run_test(test_args):
 
     print(f"Model parameters: {sum(p.numel() for p in model.parameters())}")
 
-    # モデルの構造を確認
-    print("Model structure:")
-    print(model)
+    # モデルの構造を確認 (コメントアウト)
+    # print("Model structure:")
+    # print(model)
 
-    # 最初の畳み込み層の重みを確認（存在する場合）
-    first_conv = None
-    for module in model.modules():
-        if isinstance(module, torch.nn.Conv2d):
-            first_conv = module
-            break
-    if first_conv is not None:
-        print(f"First conv layer weight sum: {first_conv.weight.sum().item()}")
-    else:
-        print("No convolutional layer found in the model.")
-    os.makedirs('test_results', exist_ok=True)
+    # 最初の畳み込み層の重みを確認（存在する場合）(コメントアウト)
+    # first_conv = None
+    # for module in model.modules():
+    #     if isinstance(module, torch.nn.Conv2d):
+    #         first_conv = module
+    #         break
+    # if first_conv is not None:
+    #     print(f"First conv layer weight sum: {first_conv.weight.sum().item()}")
+    # else:
+    #     print("No convolutional layer found in the model.")
+
+    os.makedirs('segmentation_results', exist_ok=True)
 
     for test_step, batch in enumerate(tqdm(test_dataloader)):
         print(f"Processing batch {test_step + 1}")
@@ -361,8 +362,10 @@ def run_test(test_args):
             masks_pred = torch.stack(masks_pred, dim=0)
         masks_pred = masks_pred.squeeze().cpu().numpy()
 
-        # 元画像の取得
-        original_image = images[0].cpu().numpy().transpose(1, 2, 0)
+        # 元画像の取得と正規化
+        original_image = images.squeeze().cpu().numpy()
+        if original_image.shape[0] == 3:  # チャンネルが最初の次元にある場合
+            original_image = original_image.transpose(1, 2, 0)
         original_image = (original_image - original_image.min()) / (original_image.max() - original_image.min())
 
         # セグメンテーション結果の視覚化
@@ -375,10 +378,8 @@ def run_test(test_args):
 
         # セグメンテーション結果の表示
         segmentation = masks_pred > 0.5  # 閾値を調整する場合はここを変更
-        masked_image = np.zeros_like(original_image)
-        masked_image[:,:,0] = segmentation  # 赤チャンネルにマスクを適用
         ax2.imshow(original_image)
-        ax2.imshow(masked_image, alpha=0.5)  # アルファ値を調整して透明度を変更できます
+        ax2.imshow(segmentation, alpha=0.5, cmap='jet')
         ax2.set_title('Segmentation Result')
         ax2.axis('off')
 
@@ -387,6 +388,9 @@ def run_test(test_args):
         plt.close()
 
         print(f"Segmentation result saved as segmentation_results/result_{test_step}.png")
+
+        print(f"Shape of masks_pred: {masks_pred.shape}")
+        print(f"Unique values in masks_pred: {np.unique(masks_pred)}")
 
     print("All segmentation results have been saved.")
   
