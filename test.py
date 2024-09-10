@@ -110,7 +110,7 @@ def run_test(test_args):
     else:
         if test_args.dataset == 'custom':
             # カスタムデータセット用のクラス名を設定
-            class_names = ['Background', 'Foreground']  # または適切なクラス名のリスト
+            class_names = test_dataset.class_names  # または適切なクラス名のリスト
         elif test_args.dataset in ['jsrt', 'fls']:
             class_names = test_dataset.class_names
         else:
