@@ -118,6 +118,9 @@ def run_test(test_args):
             class_names = ['Background', 'Foreground']
         iou_eval = StreamSegMetrics(class_names=class_names)
 
+    print(f"Model parameters: {sum(p.numel() for p in model.parameters())}")
+    print(f"First layer weight sum: {model.image_encoder.patch_embed.proj.weight.sum().item()}")
+
     os.makedirs('test_results', exist_ok=True)
 
     for test_step, batch in enumerate(tqdm(test_dataloader)):
@@ -140,29 +143,44 @@ def run_test(test_args):
         # モデル出力の処理
         if isinstance(masks_pred, list):
             masks_pred = torch.stack(masks_pred, dim=0)
-        masks_pred = masks_pred.cpu().numpy()
+        masks_pred = masks_pred.squeeze().cpu().numpy()
 
-        masks_gt = batch['gt_masks'][0] if isinstance(batch['gt_masks'], list) else batch['gt_masks']
-        masks_gt = masks_gt.cpu().numpy() if isinstance(masks_gt, torch.Tensor) else masks_gt
+        # 元画像の取得
+        original_image = images[0].cpu().numpy().transpose(1, 2, 0)
+        original_image = (original_image - original_image.min()) / (original_image.max() - original_image.min())
 
-        print(f"Shape of masks_pred: {masks_pred.shape}")
-        print(f"Shape of masks_gt: {masks_gt.shape}")
-        print(f"Unique values in masks_pred: {np.unique(masks_pred)}")
-        print(f"Unique values in masks_gt: {np.unique(masks_gt)}")
+        # セグメンテーション結果の視覚化
+        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(20, 10))
 
-        # IoU の計算
-        try:
-            iou_eval.update(masks_gt, masks_pred, batch['index_name'])
-        except Exception as e:
-            print(f"Error in iou_eval.update: {str(e)}")
-            print(f"masks_gt shape: {masks_gt.shape}, dtype: {masks_gt.dtype}")
-            print(f"masks_pred shape: {masks_pred.shape}, dtype: {masks_pred.dtype}")
-            print(f"batch['index_name']: {batch['index_name']}")
+        # 元画像の表示
+        ax1.imshow(original_image)
+        ax1.set_title('Original Image')
+        ax1.axis('off')
+
+        # セグメンテーション結果の表示
+        segmentation = masks_pred > 0.5  # 閾値を調整する場合はここを変更
+        masked_image = np.zeros_like(original_image)
+        masked_image[:,:,0] = segmentation  # 赤チャンネルにマスクを適用
+        ax2.imshow(original_image)
+        ax2.imshow(masked_image, alpha=0.5)  # アルファ値を調整して透明度を変更できます
+        ax2.set_title('Segmentation Result')
+        ax2.axis('off')
+
+        plt.tight_layout()
+        plt.savefig(f'segmentation_results/result_{test_step}.png')
+        plt.close()
+
+        print(f"Segmentation result saved as segmentation_results/result_{test_step}.png")
+
+    print("All segmentation results have been saved.")
+  
 
     # 最終的な mIoU の計算と出力
-    miou = iou_eval.compute()[0]['Mean Foreground IoU']
-    print(f'Final mIoU: {miou:.2%}')
-
+    try:
+        miou = iou_eval.compute()[0]['Mean Foreground IoU']
+        print(f'Final mIoU: {miou:.2%}')
+    except Exception as e:
+        print(f"Error in computing mIoU: {str(e)}")
 
 if __name__ == '__main__':
     args = parse()
