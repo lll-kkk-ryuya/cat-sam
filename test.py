@@ -1,5 +1,6 @@
 import argparse
 import os
+import numpy as np
 from os.path import join
 import json
 import matplotlib.pyplot as plt
@@ -120,50 +121,47 @@ def run_test(test_args):
     os.makedirs('test_results', exist_ok=True)
 
     for test_step, batch in enumerate(tqdm(test_dataloader)):
-        batch = batch_to_cuda(batch, device)
+        print(f"Processing batch {test_step + 1}")
+
+        # バッチデータの処理
+        images = batch['images'][0] if isinstance(batch['images'], list) else batch['images']
+        box_coords = batch['box_coords'][0] if isinstance(batch['box_coords'], list) else batch['box_coords']
+        images = images.to(device)
+        box_coords = box_coords.to(device)
+
+        print(f"Input image shape: {images.shape}")
+        print(f"Input box_coords shape: {box_coords.shape}")
+
+        # モデルの推論
         with torch.no_grad():
-            model.set_infer_img(img=batch['images'])
-            if test_args.dataset == 'm_roads':
-                masks_pred = model.infer(point_coords=batch['point_coords'])
-            else:
-                masks_pred = model.infer(box_coords=batch['box_coords'])
+            model.set_infer_img(img=images)
+            masks_pred = model.infer(box_coords=box_coords)
 
-        masks_gt = batch['gt_masks']
-        
-        # NumPy 配列に変換（必要な場合のみ）
-        if isinstance(masks_pred, torch.Tensor):
-            masks_pred = masks_pred.cpu().numpy()
-        if isinstance(masks_gt, torch.Tensor):
-            masks_gt = masks_gt.cpu().numpy()
+        # モデル出力の処理
+        if isinstance(masks_pred, list):
+            masks_pred = torch.stack(masks_pred, dim=0)
+        masks_pred = masks_pred.cpu().numpy()
 
-        iou_eval.update(masks_gt, masks_pred, batch['index_name'])
+        masks_gt = batch['gt_masks'][0] if isinstance(batch['gt_masks'], list) else batch['gt_masks']
+        masks_gt = masks_gt.cpu().numpy() if isinstance(masks_gt, torch.Tensor) else masks_gt
 
-        # 結果の可視化
-        for i in range(len(batch['images'])):
-            fig, axs = plt.subplots(1, 3, figsize=(15, 5))
-            
-            # 元画像
-            img = batch['images'][i].cpu().permute(1, 2, 0).numpy()
-            axs[0].imshow(img)
-            axs[0].set_title('Original Image')
-            axs[0].axis('off')
-            
-            # 予測マスク
-            axs[1].imshow(masks_pred[i][0], cmap='gray')
-            axs[1].set_title('Predicted Mask')
-            axs[1].axis('off')
-            
-            # 正解マスク
-            axs[2].imshow(masks_gt[i][0], cmap='gray')
-            axs[2].set_title('Ground Truth Mask')
-            axs[2].axis('off')
-            
-            plt.tight_layout()
-            plt.savefig(f'test_results/result_{test_step}_{i}.png')
-            plt.close()
+        print(f"Shape of masks_pred: {masks_pred.shape}")
+        print(f"Shape of masks_gt: {masks_gt.shape}")
+        print(f"Unique values in masks_pred: {np.unique(masks_pred)}")
+        print(f"Unique values in masks_gt: {np.unique(masks_gt)}")
 
+        # IoU の計算
+        try:
+            iou_eval.update(masks_gt, masks_pred, batch['index_name'])
+        except Exception as e:
+            print(f"Error in iou_eval.update: {str(e)}")
+            print(f"masks_gt shape: {masks_gt.shape}, dtype: {masks_gt.dtype}")
+            print(f"masks_pred shape: {masks_pred.shape}, dtype: {masks_pred.dtype}")
+            print(f"batch['index_name']: {batch['index_name']}")
+
+    # 最終的な mIoU の計算と出力
     miou = iou_eval.compute()[0]['Mean Foreground IoU']
-    print(f'mIoU: {miou:.2%}')
+    print(f'Final mIoU: {miou:.2%}')
 
 
 if __name__ == '__main__':
