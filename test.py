@@ -2,7 +2,7 @@ import argparse
 import os
 from os.path import join
 import json
-
+import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
@@ -117,6 +117,8 @@ def run_test(test_args):
             class_names = ['Background', 'Foreground']
         iou_eval = StreamSegMetrics(class_names=class_names)
 
+    os.makedirs('test_results', exist_ok=True)
+
     for test_step, batch in enumerate(tqdm(test_dataloader)):
         batch = batch_to_cuda(batch, device)
         with torch.no_grad():
@@ -137,6 +139,29 @@ def run_test(test_args):
                     raise RuntimeError
 
         iou_eval.update(masks_gt, masks_pred, batch['index_name'])
+
+        # 結果の可視化
+        for i in range(len(batch['images'])):
+            fig, axs = plt.subplots(1, 3, figsize=(15, 5))
+            
+            # 元画像
+            axs[0].imshow(batch['images'][i].cpu().permute(1, 2, 0))
+            axs[0].set_title('Original Image')
+            axs[0].axis('off')
+            
+            # 予測マスク
+            axs[1].imshow(masks_pred[i][0].cpu().numpy(), cmap='gray')
+            axs[1].set_title('Predicted Mask')
+            axs[1].axis('off')
+            
+            # 正解マスク
+            axs[2].imshow(masks_gt[i][0].cpu().numpy(), cmap='gray')
+            axs[2].set_title('Ground Truth Mask')
+            axs[2].axis('off')
+            
+            plt.tight_layout()
+            plt.savefig(f'test_results/result_{test_step}_{i}.png')
+            plt.close()
 
     miou = iou_eval.compute()[0]['Mean Foreground IoU']
     print(f'mIoU: {miou:.2%}')
