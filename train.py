@@ -210,7 +210,7 @@ def main_worker(worker_id, worker_args):
             json_config = json.load(f)
         train_dataset = dataset_class(
             data_dir=dataset_dir,
-            json_config=json_config,
+            json_config=json_config['train'],  # トレーニングデータのみを渡す
             train_flag=True,
             shot_num=worker_args.shot_num,
             transforms=transforms,
@@ -224,7 +224,7 @@ def main_worker(worker_id, worker_args):
         )
         val_dataset = dataset_class(
             data_dir=dataset_dir,
-            json_config=json_config,
+            json_config=json_config['validation'],  # バリデーションデータのみを渡す
             train_flag=False,
             label_threshold=worker_args.label_threshold,
             object_connectivity=worker_args.object_connectivity,
