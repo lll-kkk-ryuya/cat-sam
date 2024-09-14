@@ -332,8 +332,8 @@ def main_worker(worker_id, worker_args):
         if worker_args.shot_num is None:
             max_epoch_num, valid_per_epochs = 30, 1
         else:
-            #max_epoch_num = int(2000 - (worker_args.shot_num - 1) * 120) 
-            max_epoch_num = int(500 - (worker_args.shot_num - 1) * 120)
+            max_epoch_num = int(2000 - (worker_args.shot_num - 1) * 120) 
+            #max_epoch_num = int(500 - (worker_args.shot_num - 1) * 120)
             valid_per_epochs = max(1, int(20 - (worker_args.shot_num - 1)))  
             max_epoch_num = max(max_epoch_num, 100)  
     else:
