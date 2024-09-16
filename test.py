@@ -144,17 +144,6 @@ def run_test(test_args):
         images = batch['images'][0] if isinstance(batch['images'], list) else batch['images']
         box_coords = batch['box_coords'][0] if isinstance(batch['box_coords'], list) else batch['box_coords']
         images = images.to(device)
-        if 'box_coords' in batch and batch['box_coords'] is not None:
-          box_coords = batch['box_coords'][0] if isinstance(batch['box_coords'], list) else batch['box_coords']
-          box_coords = box_coords.to(device)
-        else:
-          box_coords = None
-
-    print(f"Input image shape: {images.shape}")
-    if box_coords is not None:
-        print(f"Input box_coords shape: {box_coords.shape}")
-    else:
-        print("No box_coords provided for this batch")
         box_coords = box_coords.to(device)
 
         print(f"Input image shape: {images.shape}")
