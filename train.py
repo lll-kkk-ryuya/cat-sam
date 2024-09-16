@@ -95,7 +95,7 @@ def parse():
         help="Your target dataset. This argument is required."
     )
     parser.add_argument(
-        '--shot_num', default=None, type=int, choices=[1, 16],
+        '--shot_num', default=None, type=int, 
         help="The number of your target setting. For one-shot please give --shot_num 1. "
              "For 16-shot please give --shot_num 16. For full-shot please leave it blank. "
              "Default to be full-shot."
