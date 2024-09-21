@@ -6,7 +6,7 @@ import torch
 from PIL import Image
 import numpy as np
 from torch.utils.data import Dataset
-from cat_sam.datasets.transforms import Compose,NormalizeMask
+from cat_sam.datasets.transforms import Compose
 
 from cat_sam.datasets.misc import generate_prompts_from_mask
 
@@ -17,18 +17,9 @@ class BaseSegDataset(Dataset):
             self,
             dataset_config: Union[Dict, List[Dict]],
             label_threshold: Union[int, None] = 128,
-            transforms: List = None,
-            normalize_mask: bool = True 
+            transforms: List = None
     ):
         self.label_threshold = label_threshold
-        self.normalize_mask = normalize_mask
-        
-        # 正規化処理を追加
-        if transforms is None:
-            transforms = []
-        if self.normalize_mask:
-            transforms.append(NormalizeMask())
-        
         self.transforms = Compose(transforms) if transforms else None
 
         if isinstance(dataset_config, Dict):
@@ -143,7 +134,6 @@ class BinaryCATSAMDataset(BaseSegDataset):
     def __init__(
             self,
             train_flag: bool,
-            normalize_mask=True,
             offline_prompt_points: Union[str, List[str]] = None,
             prompt_point_num: int = 1,
             max_object_num: int = None,
