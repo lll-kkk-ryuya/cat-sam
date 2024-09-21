@@ -8,6 +8,27 @@ from typing import List, Tuple, Union
 
 import torch
 
+def normalize_mask(mask):
+    """
+    マスク画像を正規化する汎用関数。
+    グレースケール、RGB、RGBA形式に対応。
+    """
+    if mask.ndim == 2:
+        normalized = mask / 255.0
+    elif mask.ndim == 3:
+        if mask.shape[2] == 3:
+            normalized = np.max(mask, axis=2) / 255.0
+        elif mask.shape[2] == 4:
+            normalized = np.max(mask[:, :, :3], axis=2) / 255.0
+        else:
+            raise ValueError("Unsupported number of channels")
+    else:
+        raise ValueError("Unsupported mask dimension")
+    
+    # 二値化（オプション）
+    # normalized = (normalized > 0.5).astype(float)
+    
+    return normalized
 
 class BaseTransform(ABC):
     def __init__(self, p: float = 1.0, **kwargs):
@@ -29,6 +50,12 @@ class BaseTransform(ABC):
         raise NotImplementedError
 
 
+class NormalizeMask(BaseTransform):
+    def apply(self, image: np.ndarray, mask: np.ndarray = None):
+        if mask is not None:
+            mask = normalize_mask(mask)
+        return image, mask
+    
 class Compose:
     def __init__(self, transforms: List[BaseTransform]):
         if isinstance(transforms, BaseTransform):
