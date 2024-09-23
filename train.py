@@ -134,6 +134,10 @@ def parse():
     )
     parser.add_argument('--json_config', type=str, 
                         help='Path to the JSON configuration file for custom dataset')
+    parser.add_argument(
+        '--relative_threshold_ratio', type=float, default=0.001,
+        help="Ratio for relative threshold calculation"
+        )
     
     return parser.parse_args()
 
