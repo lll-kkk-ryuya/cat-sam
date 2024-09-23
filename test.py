@@ -195,7 +195,6 @@ def run_test(test_args):
     # 最終的な mIoU の計算と出力
     try:
         miou = iou_eval.compute()[0]['Mean Foreground IoU']
-        print(f'Final mIoU: {miou:.2%}')
     except Exception as e:
         print(f"Error in computing mIoU: {str(e)}")
 
