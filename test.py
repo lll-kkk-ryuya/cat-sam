@@ -136,6 +136,7 @@ def run_test(test_args):
     #     print("No convolutional layer found in the model.")
 
     os.makedirs('segmentation_results', exist_ok=True)
+    os.makedirs('segmentation_metadata', exist_ok=True) 
 
     for test_step, batch in enumerate(tqdm(test_dataloader)):
         print(f"Processing batch {test_step + 1}")
