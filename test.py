@@ -201,9 +201,13 @@ def run_test(test_args):
         ax2.axis('off')
 
         plt.figure(figsize=(10, 10))
-        plt.imshow(segmentation, cmap='gray')  # セグメンテーションマスクをグレースケールで表示
-        plt.title('Segmentation Mask')
+        plt.imshow(segmentation, cmap='gray')  
+        plt.imshow(original_image)
+        plt.imshow(np.ma.masked_where(segmentation == 0, segmentation), cmap='jet', alpha=0.5)
+        plt.title('Segmentation Mask Overlaid on Original Image')
         plt.axis('off')
+        plt.savefig(f'segmentation_results/segmentation_mask_overlay_{test_step}.png')
+        plt.close()
 
         # セグメンテーションマスクを保存する
         plt.savefig(f'segmentation_results/segmentation_mask_{test_step}.png')
