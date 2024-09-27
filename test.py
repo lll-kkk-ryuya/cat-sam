@@ -174,17 +174,39 @@ def run_test(test_args):
         ax1.axis('off')
 
         # セグメンテーション結果の表示
-        segmentation = masks_pred > 0.5  # 閾値を調整する場合はここを変更
+        segmentation = masks_pred > 0.5  # 閾値でバイナリマスクを作成
+        area = np.sum(segmentation)  # セグメンテーションされた領域の面積
+        coords = np.argwhere(segmentation)  # セグメンテーションされた領域の座標
+        if coords.size > 0:
+            y_min, x_min = coords.min(axis=0)
+            y_max, x_max = coords.max(axis=0)
+            bounding_box = [int(x_min), int(y_min), int(x_max), int(y_max)]  # バウンディングボックス
+        else:
+            bounding_box = [0, 0, 0, 0]
+
+        # メタデータを保存
+        metadata = {
+            'image_id': test_step,  # テストステップのインデックス。処理している画像に割り当てられる一意のID。
+            'segmentation_area': int(area),  # セグメンテーションされた領域の面積（ピクセル数）。
+            'bounding_box': bounding_box,  # セグメンテーション領域を囲む矩形（バウンディングボックス）の [x_min, y_min, x_max, y_max]。
+            'mask_shape': masks_pred.shape,  # セグメンテーションマスク（予測マスク）の形状（高さと幅のピクセル数）。
+            'segmentation_coords': coords.tolist()  # セグメンテーションされた領域の各ピクセルの座標リスト（[y, x] の形式で保存）。
+            }
+        with open(f'segmentation_metadata/metadata_{test_step}.json', 'w') as f:
+            json.dump(metadata, f)
         ax2.imshow(original_image)
         ax2.imshow(segmentation, alpha=0.5, cmap='jet')
         ax2.set_title('Segmentation Result')
         ax2.axis('off')
 
-        plt.tight_layout()
-        plt.savefig(f'segmentation_results/result_{test_step}.png')
-        plt.close()
+        plt.figure(figsize=(10, 10))
+        plt.imshow(segmentation, cmap='gray')  # セグメンテーションマスクをグレースケールで表示
+        plt.title('Segmentation Mask')
+        plt.axis('off')
 
-        print(f"Segmentation result saved as segmentation_results/result_{test_step}.png")
+        # セグメンテーションマスクを保存する
+        plt.savefig(f'segmentation_results/segmentation_mask_{test_step}.png')
+        plt.close()
 
         print(f"Shape of masks_pred: {masks_pred.shape}")
         print(f"Unique values in masks_pred: {np.unique(masks_pred)}")
